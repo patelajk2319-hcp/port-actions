@@ -13,8 +13,8 @@ terraform {
 
 provider "google" {
   project = var.gcp_project_id
-  region  = "us-central1"
-  zone    = "us-central1-a"
+  region  = "europe-west2"
+  zone    = "europe-west2-a"
 }
 
 provider "port" {
@@ -28,6 +28,7 @@ provider "port" {
 resource "google_compute_instance" "dev_env" {
   name         = var.environment_name
   machine_type = "e2-micro"
+  zone         = "europe-west2-a"
 
   boot_disk {
     initialize_params {
@@ -69,7 +70,7 @@ resource "port_entity" "dev_env" {
   properties = {
     string_props = {
       "env_type"   = "dev"
-      "cluster"    = "gcp-${var.gcp_project_id}"
+      "cluster"    = "gcp-europe-west2"
       "namespace"  = var.environment_name
       "status"     = "Running"
       "image_tag"  = var.base_branch

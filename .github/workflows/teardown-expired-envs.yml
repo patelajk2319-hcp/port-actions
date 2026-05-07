@@ -63,10 +63,10 @@ jobs:
 
             # Delete GCP VM if it exists
             if gcloud compute instances describe "$ENV_ID" \
-                --zone us-central1-a \
+                --zone europe-west2-a \
                 --project "$GCP_PROJECT_ID" &>/dev/null; then
               gcloud compute instances delete "$ENV_ID" \
-                --zone us-central1-a \
+                --zone europe-west2-a \
                 --project "$GCP_PROJECT_ID" \
                 --quiet
               echo "    GCP instance deleted"
