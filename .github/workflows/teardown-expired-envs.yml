@@ -1,0 +1,87 @@
+name: Teardown Expired Dev Environments
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # every hour
+  workflow_dispatch: {}   # allow manual trigger for demo
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get expired dev environments from Port
+        id: get-expired
+        run: |
+          TOKEN=$(curl -s -X POST https://api.port.io/v1/auth/access_token \
+            -H "Content-Type: application/json" \
+            -d '{"clientId":"${{ secrets.PORT_CLIENT_ID }}","clientSecret":"${{ secrets.PORT_CLIENT_SECRET }}"}' \
+            | jq -r '.accessToken')
+
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          EXPIRED=$(curl -s "https://api.port.io/v1/blueprints/environment/entities" \
+            -H "Authorization: Bearer $TOKEN" \
+            | jq -r --arg now "$NOW" '
+              .entities[]
+              | select(.properties.env_type == "dev")
+              | select(.properties.ttl_expiry != null)
+              | select(.properties.ttl_expiry < $now)
+              | .identifier
+            ')
+
+          echo "expired<<EOF" >> $GITHUB_OUTPUT
+          echo "$EXPIRED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Found expired environments: $EXPIRED"
+
+      - name: Destroy expired GCP instances and Port entities
+        if: steps.get-expired.outputs.expired != ''
+        env:
+          PORT_CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
+          PORT_CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          TOKEN=$(curl -s -X POST https://api.port.io/v1/auth/access_token \
+            -H "Content-Type: application/json" \
+            -d "{\"clientId\":\"$PORT_CLIENT_ID\",\"clientSecret\":\"$PORT_CLIENT_SECRET\"}" \
+            | jq -r '.accessToken')
+
+          while IFS= read -r ENV_ID; do
+            [ -z "$ENV_ID" ] && continue
+            echo "==> Tearing down: $ENV_ID"
+
+            # Delete GCP VM if it exists
+            if gcloud compute instances describe "$ENV_ID" \
+                --zone us-central1-a \
+                --project "$GCP_PROJECT_ID" &>/dev/null; then
+              gcloud compute instances delete "$ENV_ID" \
+                --zone us-central1-a \
+                --project "$GCP_PROJECT_ID" \
+                --quiet
+              echo "    GCP instance deleted"
+            else
+              echo "    GCP instance not found, skipping"
+            fi
+
+            # Delete Port entity
+            curl -s -X DELETE \
+              "https://api.port.io/v1/blueprints/environment/entities/$ENV_ID" \
+              -H "Authorization: Bearer $TOKEN" > /dev/null
+            echo "    Port entity deleted"
+
+          done <<< "${{ steps.get-expired.outputs.expired }}"
+
+      - name: Nothing to teardown
+        if: steps.get-expired.outputs.expired == ''
+        run: echo "No expired dev environments found."

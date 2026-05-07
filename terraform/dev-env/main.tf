@@ -56,6 +56,11 @@ resource "google_compute_instance" "dev_env" {
 
 # ── Port: register the new environment in the catalog ─────────────────────────
 
+locals {
+  ttl_hours = tonumber(replace(var.ttl, "h", ""))
+  ttl_expiry = timeadd(timestamp(), "${local.ttl_hours}h")
+}
+
 resource "port_entity" "dev_env" {
   blueprint  = "environment"
   identifier = var.environment_name
@@ -63,11 +68,12 @@ resource "port_entity" "dev_env" {
 
   properties = {
     string_props = {
-      "env_type"  = "dev"
-      "cluster"   = "gcp-${var.gcp_project_id}"
+      "env_type"   = "dev"
+      "cluster"    = "gcp-${var.gcp_project_id}"
       "namespace"  = var.environment_name
-      "status"    = "Running"
-      "image_tag" = var.base_branch
+      "status"     = "Running"
+      "image_tag"  = var.base_branch
+      "ttl_expiry" = local.ttl_expiry
     }
     number_props = {
       "replica_count" = 1
