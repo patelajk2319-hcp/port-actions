@@ -2,7 +2,7 @@ name: Teardown Expired Dev Environments
 
 on:
   schedule:
-    - cron: "0 * * * *"  # every hour
+    - cron: "*/5 * * * *"  # every 5 minutes
   workflow_dispatch: {}   # allow manual trigger for demo
 
 jobs:

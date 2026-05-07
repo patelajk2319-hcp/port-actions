@@ -57,8 +57,8 @@ resource "google_compute_instance" "dev_env" {
 # ── Port: register the new environment in the catalog ─────────────────────────
 
 locals {
-  ttl_hours = tonumber(replace(var.ttl, "h", ""))
-  ttl_expiry = timeadd(timestamp(), "${local.ttl_hours}h")
+  ttl_minutes = tonumber(replace(var.ttl, "m", ""))
+  ttl_expiry  = timeadd(timestamp(), "${local.ttl_minutes}m")
 }
 
 resource "port_entity" "dev_env" {
@@ -74,6 +74,7 @@ resource "port_entity" "dev_env" {
       "status"     = "Running"
       "image_tag"  = var.base_branch
       "ttl_expiry" = local.ttl_expiry
+
     }
     number_props = {
       "replica_count" = 1
