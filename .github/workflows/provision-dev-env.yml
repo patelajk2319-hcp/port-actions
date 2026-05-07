@@ -14,13 +14,6 @@ on:
         description: Time-to-live (e.g. 4h, 8h, 24h)
         required: true
         default: 8h
-      cluster:
-        description: Target cluster
-        required: true
-      include_seed_data:
-        description: Include seed data
-        required: false
-        default: "false"
       service_id:
         description: Port service entity identifier
         required: true
