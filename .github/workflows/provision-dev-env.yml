@@ -1,0 +1,87 @@
+name: Provision Dev Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: Name for the dev environment
+        required: true
+      base_branch:
+        description: Git branch to deploy
+        required: true
+        default: main
+      ttl:
+        description: Time-to-live (e.g. 4h, 8h, 24h)
+        required: true
+        default: 8h
+      cluster:
+        description: Target K8s cluster
+        required: true
+      include_seed_data:
+        description: Include seed data
+        required: false
+        default: "false"
+      service_id:
+        description: Port service entity identifier
+        required: true
+      service_name:
+        description: Port service entity name
+        required: true
+      port_run_id:
+        description: Port action run ID (for status callbacks)
+        required: true
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log inputs
+        run: |
+          echo "Service:     ${{ inputs.service_name }} (${{ inputs.service_id }})"
+          echo "Environment: ${{ inputs.environment_name }}"
+          echo "Branch:      ${{ inputs.base_branch }}"
+          echo "Cluster:     ${{ inputs.cluster }}"
+          echo "TTL:         ${{ inputs.ttl }}"
+
+      - name: Report in-progress to Port
+        run: |
+          curl -s -X PATCH \
+            "https://api.port.io/v1/actions/runs/${{ inputs.port_run_id }}" \
+            -H "Authorization: Bearer $(curl -s -X POST https://api.port.io/v1/auth/access_token \
+              -H 'Content-Type: application/json' \
+              -d '{"clientId":"${{ secrets.PORT_CLIENT_ID }}","clientSecret":"${{ secrets.PORT_CLIENT_SECRET }}"}' \
+              | jq -r '.accessToken')" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"IN_PROGRESS","message":{"run_status":"Provisioning environment ${{ inputs.environment_name }}..."}}'
+
+      - name: Simulate provisioning
+        run: |
+          echo "Creating namespace ${{ inputs.environment_name }} on ${{ inputs.cluster }}..."
+          sleep 5
+          echo "Deploying ${{ inputs.service_name }} from branch ${{ inputs.base_branch }}..."
+          sleep 5
+          echo "Environment ready. TTL: ${{ inputs.ttl }}"
+
+      - name: Report success to Port
+        if: success()
+        run: |
+          curl -s -X PATCH \
+            "https://api.port.io/v1/actions/runs/${{ inputs.port_run_id }}" \
+            -H "Authorization: Bearer $(curl -s -X POST https://api.port.io/v1/auth/access_token \
+              -H 'Content-Type: application/json' \
+              -d '{"clientId":"${{ secrets.PORT_CLIENT_ID }}","clientSecret":"${{ secrets.PORT_CLIENT_SECRET }}"}' \
+              | jq -r '.accessToken')" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"SUCCESS","message":{"run_status":"Environment ${{ inputs.environment_name }} is ready on ${{ inputs.cluster }}. TTL: ${{ inputs.ttl }}"}}'
+
+      - name: Report failure to Port
+        if: failure()
+        run: |
+          curl -s -X PATCH \
+            "https://api.port.io/v1/actions/runs/${{ inputs.port_run_id }}" \
+            -H "Authorization: Bearer $(curl -s -X POST https://api.port.io/v1/auth/access_token \
+              -H 'Content-Type: application/json' \
+              -d '{"clientId":"${{ secrets.PORT_CLIENT_ID }}","clientSecret":"${{ secrets.PORT_CLIENT_SECRET }}"}' \
+              | jq -r '.accessToken')" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"FAILURE","message":{"run_status":"Failed to provision environment ${{ inputs.environment_name }}"}}'
